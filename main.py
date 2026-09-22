@@ -1,141 +1,158 @@
-import streamlit as st
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 
 # -----------------------------
 # 기본 설정
 # -----------------------------
 st.set_page_config(
-    page_title="영화 데이터 그래프 도감 1 - 시간",
+    page_title="영화 데이터 그래프 도감 2 - 분포와 관계",
     page_icon="🎬",
     layout="wide",
 )
 
-DATA_URL = "https://raw.githubusercontent.com/greatsong/modudata/main/data/kobis_daily.csv"
+DATA_URL = "https://raw.githubusercontent.com/greatsong/modudata/main/data/kobis_movies.csv"
 
 
 # -----------------------------
-# 데이터 불러오기 / 전처리
+# 데이터 불러오기 및 전처리
 # -----------------------------
 @st.cache_data
 def load_data():
     df = pd.read_csv(DATA_URL, encoding="utf-8-sig")
 
-    # 날짜: 20250901 같은 8자리 값을 실제 날짜형으로 변환
-    df["날짜"] = pd.to_datetime(
-        df["날짜"].astype(str),
+    # 개봉일: YYYYMMDD 형식의 8자리 값을 실제 날짜형으로 변환
+    df["openDt"] = pd.to_datetime(
+        df["openDt"].astype(str),
         format="%Y%m%d",
-        errors="coerce",
+        errors="coerce"
     )
 
-    # 숫자형 열 정리
-    numeric_cols = ["순위", "일관객", "누적관객", "스크린수", "상영횟수"]
-    for col in numeric_cols:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    # genre에 |가 있으면 첫 번째 장르만 사용
+    # 예: "드라마|전쟁" -> "드라마"
+    # "/"는 사용자가 지정한 분리 기호가 아니므로 그대로 둠
+    df["main_genre"] = (
+        df["genre"]
+        .fillna("기타")
+        .astype(str)
+        .str.split("|", regex=False)
+        .str[0]
+        .str.strip()
+    )
 
-    # 날짜 변환에 실패한 행이 있다면 제외
-    df = df.dropna(subset=["날짜"]).copy()
+    # 빈 장르값 처리
+    df.loc[df["main_genre"].eq(""), "main_genre"] = "기타"
 
     return df
 
 
-try:
-    df = load_data()
-except Exception as e:
-    st.error("데이터를 불러오는 중 오류가 발생했습니다.")
-    st.exception(e)
-    st.stop()
+df = load_data()
 
 
 # -----------------------------
-# 제목 / 데이터 안내
+# 제목
 # -----------------------------
-st.title("🎬 영화 데이터 그래프 도감 1 - 시간")
-st.caption(
-    "1년치 일별 박스오피스 TOP 10 데이터를 이용해 "
-    "영화 관객의 시간에 따른 변화를 살펴봅니다."
-)
-
-with st.expander("데이터 정보 보기"):
-    st.write(
-        f"- 데이터 기간: **{df['날짜'].min():%Y-%m-%d} ~ {df['날짜'].max():%Y-%m-%d}**"
-    )
-    st.write(f"- 전체 기록 수: **{len(df):,}개**")
-    st.write(f"- 영화 수: **{df['영화명'].nunique():,}편**")
-    st.write(
-        "- 열: 날짜 · 순위 · 영화코드 · 영화명 · 일관객 · 누적관객 · "
-        "스크린수 · 상영횟수"
-    )
+st.title("영화 데이터 그래프 도감 2 - 분포와 관계")
+st.caption("1년간 박스오피스 10위권에 진입한 영화 중 해당 기간에 개봉한 영화 데이터를 분석합니다.")
 
 st.divider()
 
 
 # =========================================================
-# 그래프 1
+# 그래프 1. 장르별 영화 편수
 # =========================================================
-st.header("그래프 1. 영화별 날짜에 따른 일관객 변화")
+st.header("1. 장르별 영화 편수")
+st.write("영화의 대표 장르를 기준으로 장르별 영화 편수를 비교합니다.")
 
-movie_names = sorted(df["영화명"].dropna().unique())
-
-selected_movie = st.selectbox(
-    "영화를 선택하세요.",
-    movie_names,
+genre_counts = (
+    df["main_genre"]
+    .value_counts()
+    .rename_axis("장르")
+    .reset_index(name="영화 편수")
 )
 
-movie_df = (
-    df.loc[df["영화명"] == selected_movie, ["날짜", "일관객"]]
-    .sort_values("날짜")
-    .copy()
-)
-
-fig1 = px.line(
-    movie_df,
-    x="날짜",
-    y="일관객",
-    markers=True,
-    title=f"{selected_movie} - 날짜별 일관객 변화",
+fig1 = px.pie(
+    genre_counts,
+    names="장르",
+    values="영화 편수",
+    hole=0.48,
 )
 
 fig1.update_traces(
-    hovertemplate="<b>%{x|%Y-%m-%d}</b><br>일관객: %{y:,.0f}명<extra></extra>"
+    textinfo="label+percent",
+    hovertemplate=(
+        "<b>%{label}</b><br>"
+        "영화 편수: %{value:,}편<br>"
+        "비율: %{percent}<extra></extra>"
+    ),
 )
 
 fig1.update_layout(
-    xaxis_title="날짜",
-    yaxis_title="일관객(명)",
-    hovermode="x unified",
+    margin=dict(t=30, b=20, l=20, r=20),
+    legend_title_text="장르",
 )
-
-fig1.update_yaxes(tickformat=",")
 
 st.plotly_chart(fig1, use_container_width=True)
 
 st.markdown(
     "**이 그래프로 알 수 있는 것:** "
-    "선택한 영화가 일별 박스오피스 TOP 10에 기록된 기간 동안 "
-    "일관객 수가 시간에 따라 어떻게 변했는지 확인할 수 있습니다."
-)
-
-st.caption(
-    "※ 이 데이터는 매일 박스오피스 10위권 기록만 포함하므로, "
-    "선택한 영화가 10위 밖이었던 날짜는 그래프에 나타나지 않습니다."
+    "장르별 영화 편수와 전체 영화에서 각 장르가 차지하는 비율을 비교할 수 있다."
 )
 
 st.divider()
 
 
 # =========================================================
-# 앞으로 추가할 그래프 구역
+# 그래프 2. 장르별 영화 총 관객 트리맵
 # =========================================================
-st.header("다음 그래프 구역")
-st.info(
-    "앞으로 그래프 2, 그래프 3, 그래프 4 등을 이 아래에 "
-    "서로 구분된 구역으로 계속 추가할 수 있습니다."
+st.header("2. 장르별 영화 총 관객 트리맵")
+st.write("장르 안에 각 영화를 배치하고, 영화의 총 관객 수가 많을수록 더 큰 칸으로 표시합니다.")
+
+treemap_df = df.copy()
+
+# total_audi를 숫자형으로 변환하고, 결측값은 0으로 처리
+treemap_df["total_audi"] = pd.to_numeric(
+    treemap_df["total_audi"],
+    errors="coerce"
+).fillna(0)
+
+fig2 = px.treemap(
+    treemap_df,
+    path=["main_genre", "movieNm"],
+    values="total_audi",
+    custom_data=["movieNm", "total_audi"],
 )
 
+fig2.update_traces(
+    hovertemplate=(
+        "<b>%{customdata[0]}</b><br>"
+        "총 관객: %{customdata[1]:,.0f}명"
+        "<extra></extra>"
+    )
+)
+
+fig2.update_layout(
+    margin=dict(t=30, b=20, l=20, r=20)
+)
+
+st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown(
+    "**이 그래프로 알 수 있는 것:** "
+    "장르별 구성과 각 장르 안에서 총 관객 수가 많은 영화의 상대적인 규모를 한눈에 비교할 수 있다."
+)
+
+st.divider()
+
+
+# =========================================================
+# 다음 그래프 추가 구역
+# =========================================================
+st.header("3. 다음 그래프")
+st.info("앞으로 분포와 관계를 살펴보는 그래프를 이 구역부터 계속 추가할 수 있습니다.")
+
 # 예시 구조
-# st.divider()
-# st.header("그래프 2. 제목")
-# ...
-# st.plotly_chart(fig2, use_container_width=True)
+# fig3 = ...
+# st.plotly_chart(fig3, use_container_width=True)
 # st.markdown("**이 그래프로 알 수 있는 것:** ...")
+# st.divider()
