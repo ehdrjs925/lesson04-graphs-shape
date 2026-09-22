@@ -392,7 +392,86 @@ st.divider()
 
 
 # =========================================================
+# 그래프 8. 첫 주 관객과 10위권 유지 기간의 관계
+# =========================================================
+st.header("8. 개봉 첫 주 관객이 많을수록 10위권에 더 오래 머무는가?")
+st.write(
+    "개봉 첫 주 관객 수와 박스오피스 10위권에 머문 날수 사이의 관계를 살펴봅니다."
+)
+
+relation_df = df.copy()
+
+relation_df["first_week_audi"] = pd.to_numeric(
+    relation_df["first_week_audi"],
+    errors="coerce"
+)
+
+relation_df["days_in_top10"] = pd.to_numeric(
+    relation_df["days_in_top10"],
+    errors="coerce"
+)
+
+relation_df = relation_df.dropna(
+    subset=["first_week_audi", "days_in_top10"]
+)
+
+fig8 = px.scatter(
+    relation_df,
+    x="first_week_audi",
+    y="days_in_top10",
+    hover_name="movieNm",
+    labels={
+        "first_week_audi": "개봉 첫 주 관객",
+        "days_in_top10": "10위권에 머문 날수",
+    },
+)
+
+fig8.update_traces(
+    hovertemplate=(
+        "<b>%{hovertext}</b><br>"
+        "개봉 첫 주 관객: %{x:,.0f}명<br>"
+        "10위권에 머문 날수: %{y:,.0f}일"
+        "<extra></extra>"
+    )
+)
+
+fig8.update_layout(
+    xaxis_title="개봉 첫 주 관객",
+    yaxis_title="10위권에 머문 날수",
+    margin=dict(t=30, b=20, l=20, r=20),
+)
+
+st.plotly_chart(fig8, use_container_width=True)
+
+# 두 변수의 상관계수를 계산해 설명 문구를 데이터에 맞게 자동 생성
+correlation = relation_df["first_week_audi"].corr(
+    relation_df["days_in_top10"]
+)
+
+if pd.isna(correlation):
+    relation_text = "두 변수 사이의 관계를 뚜렷하게 판단하기 어렵다"
+elif correlation >= 0.7:
+    relation_text = "개봉 첫 주 관객이 많을수록 10위권에 오래 머무는 강한 양의 관계가 나타난다"
+elif correlation >= 0.4:
+    relation_text = "개봉 첫 주 관객이 많을수록 10위권에 오래 머무는 경향이 비교적 뚜렷하게 나타난다"
+elif correlation >= 0.2:
+    relation_text = "개봉 첫 주 관객이 많을수록 10위권에 오래 머무는 약한 경향이 나타난다"
+elif correlation > -0.2:
+    relation_text = "개봉 첫 주 관객과 10위권 유지 기간 사이의 뚜렷한 관계는 크지 않다"
+else:
+    relation_text = "개봉 첫 주 관객과 10위권 유지 기간 사이에 반대 방향의 경향이 나타난다"
+
+st.markdown(
+    f"**이 그래프로 알 수 있는 것:** "
+    f"{relation_text}. "
+    f"(상관계수: {correlation:.2f})"
+)
+
+st.divider()
+
+
+# =========================================================
 # 다음 그래프 추가 구역
 # =========================================================
-st.header("8. 다음 그래프")
-st.info("앞으로 분포와 관계를 살펴보는 그래프를 이 구역부터 계속 추가할 수 있습니다.")
+st.header("9. 다음 그래프")
+st.info("새로운 질문을 정한 뒤 그 질문에 맞는 그래프를 이 구역부터 계속 추가할 수 있습니다.")
